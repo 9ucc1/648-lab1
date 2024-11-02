@@ -5,7 +5,9 @@ date: "2024-10-24"
 output: html_document
 ---
 
-Because I enjoy making things harder than they have to be, I wanted to find a dataset similar to the example Boulder data but for a different city and perform analysis on that. I took elevation data for a section of Phoenix, AZ from USGS but it was an extremely large and detailed dataset that took a long time to load. So, I used QGIS to reproject the elevation raster into 4 classes: 0-500ft, 500-1000ft, 1000-1500ft, and 1500-2400ft. I exported it as a .tif and visualized it in the RMD.
+I wanted to find a dataset similar to the example Boulder data but for a different city and perform analysis on that. I liked the Boulder elevation maps so I wanted to recreate that from publicly available data. I took elevation data for a section of Phoenix, AZ from USGS but it was an extremely large and detailed dataset that was too big to load (420 mb) into a dataframe. So I decided to simplify the dataset by reprojecting it in QGIS to have a lower resolution.
+
+I also originally classified the elevation raster into 4 classes: 0-500ft, 500-1000ft, 1000-1500ft, and 1500-2400ft. I exported it as a .tif and visualized it in the RMD.
 
 
 ```{r setup, include=FALSE}
@@ -25,61 +27,40 @@ elevation_raster <- raster("test.tif")
 
 elevation_df <- as.data.frame(as(elevation_raster, "SpatialPixelsDataFrame"))
 colnames(elevation_df) <- c("elevation", "x", "y")
-elevation_df$elevation_range <- ifelse(
-  elevation_df$elevation == 1, 500,
-  ifelse(elevation_df$elevation == 2, 1000,
-         ifelse(elevation_df$elevation == 3, 1500,
-                ifelse(elevation_df$elevation == 4, 2400, NA))))
 
 
 ggplot(elevation_df) +
-  geom_tile(aes(x = x, y = y, fill = elevation_range)) +
-  scale_fill_viridis_c(option = "magma", name = "Elevation (ft)") +
+  geom_tile(aes(x = x, y = y, fill = elevation)) +
+  scale_fill_viridis_c(option = "magma", name = "Elevation Class") +
   theme_minimal() +
   labs(title = "Phoenix Elevation")
 
 
 ```
+However this is kind of ugly and undetailed so I went with my original simplified version of the USGS dataset, which both reduces the complexity of the original 420mb dataset while keeping more of the details than what I had in the 4-class map - this one will interpret it as a continuous range of colors rather than discrete values. Since it's elevation, I think continuous colors are better anyway.
 
 ```{r}
 
 og_elev_raster <- raster("originalelev.tif")
 og_elev_df <- as.data.frame(as(og_elev_raster, "SpatialPixelsDataFrame"))
-colnames(og_elev_df) <- c("elevation", "x", "y")
+colnames(og_elev_df) <- c("elevation", "Longitude", "Latitude")
 
 og_elev_df$elevation_class_quantile <- cut(og_elev_df$elevation, breaks = quantile(og_elev_df$elevation, probs = seq(0, 1, by = 0.25)), include.lowest = TRUE)
 
 ggplot(og_elev_df) +
-  geom_tile(aes(x = x, y = y, fill = elevation)) +
-  scale_fill_viridis_c(option = "magma", name = "Elevation (ft)") +
+  geom_tile(aes(x = Longitude, y = Latitude, fill = elevation)) +
+  scale_fill_viridis_c(option = "viridis", name = "Elevation (ft)") +
   theme_minimal() +
   labs(title = "Phoenix Elevation")
 ```
+Lastly, assuming the 40,000 data points in my elevation dataset are taken at regularly spaced intervals, I thought it would be interesting to display the spread and frequency of elevation values in a histogram. From observing the map it appears the vast majority of the sampled area is in the lower 50% of elevation values, with some peaks at the northeast corner. When constructing the histogram, the result follows that pattern, with a very right-skewed distribution favoring lower elevation values.
 
 ```{r}
-df_sf <- st_as_sf(elevation_df, coords = c("x", "y "), crs = 4326)
-
-ggplot(data = df_sf) +
-  geom_sf(aes(color = elevation_class_quantile), size = 2) +  # Use elevation classes for coloring
-  scale_color_manual(values = c("blue", "green", "yellow", "orange", "red")) +  # Customize colors
+# Using ggplot2 to create a histogram
+ggplot(og_elev_df, aes(x = elevation)) +
+  geom_histogram(bins = 20 , fill = "skyblue", color = "black") +
   theme_minimal() +
-  labs(
-    title = "Elevation Map",
-    color = "Elevation Class"
-  )
+  labs(title = "Histogram of Phoenix Elevation Values", x = "Elevation (ft)", y = "Frequency")
 
 ```
 
-
-```{r}
-boulder <- st_read("boulder/BoulderSocialMedia.shp")
-boulder
-```
-
-```{r}
-boulder = st_transform(boulder, 26753) 
-ggplot() +
-    geom_sf(data =boulder,
-    fill = NA, alpha = .2) +
-    theme_bw()
-```
